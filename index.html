@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генерация изображений с Kandinsky AI</title>
+</head>
+<body>
+    <h1>Генерация изображений с Kandinsky AI</h1>
+
+    <textarea id="prompt" placeholder="Введите описание изображения..." rows="4" cols="50"></textarea><br>
+    <button onclick="generateImage()">Создать изображение</button>
+
+    <h2>Результат:</h2>
+    <div id="result">
+        <!-- Сюда вставится сгенерированное изображение -->
+    </div>
+
+    <script>
+        async function generateImage() {
+            const prompt = document.getElementById("prompt").value;
+            const apiKey = 'CC2DC7985D50BEC6E5C4C676C2913AEA';  // Ваш API-ключ
+            const secretKey = 'B9A94C5A354853111C5B043E721B13F5';  // Ваш Secret-ключ
+
+            const requestData = {
+                "type": "GENERATE",
+                "numImages": 1,
+                "width": 1024,
+                "height": 1024,
+                "generateParams": {
+                    "query": prompt
+                }
+            };
+
+            const headers = {
+                'X-Key': `Key ${apiKey}`,
+                'X-Secret': `Secret ${secretKey}`,
+                'Content-Type': 'application/json'
+            };
+
+            try {
+                // 1. Отправляем запрос на генерацию
+                let response = await fetch('https://api-key.fusionbrain.ai/key/api/v1/text2image/run', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestData)
+                });
+
+                const responseData = await response.json();
+                if (!response.ok) throw new Error(`Ошибка API: ${responseData.errorDescription}`);
+
+                const requestId = responseData.uuid;
+                console.log(`Запрос отправлен, UUID: ${requestId}`);
+
+                // 2. Ожидаем завершения генерации (проверяем статус)
+                let imageData = await checkStatus(requestId, headers);
+
+                // 3. Отображаем изображение
+                if (imageData) {
+                    const imageElement = document.createElement('img');
+                    imageElement.src = `data:image/png;base64,${imageData}`;
+                    document.getElementById('result').innerHTML = '';  // Очищаем старый результат
+                    document.getElementById('result').appendChild(imageElement);
+                } else {
+                    alert('Ошибка: изображение не получено.');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка, попробуйте снова.');
+            }
+        }
+
+        async function checkStatus(requestId, headers) {
+            for (let attempt = 0; attempt < 10; attempt++) {  // Ждём 10 раз с задержкой
+                await new Promise(resolve => setTimeout(resolve, 5000));  // Ждём 5 секунд
+                let statusResponse = await fetch(`https://api-key.fusionbrain.ai/key/api/v1/text2image/status/${requestId}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                let statusData = await statusResponse.json();
+                console.log(`Статус запроса: ${statusData.status}`);
+
+                if (statusData.status === 'DONE') {
+                    return statusData.images[0];  // Возвращаем Base64 изображение
+                } else if (statusData.status === 'FAIL') {
+                    throw new Error('Ошибка генерации изображения.');
+                }
+            }
+            throw new Error('Таймаут: генерация заняла слишком много времени.');
+        }
+    </script>
+</body>
+</html>
